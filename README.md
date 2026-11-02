@@ -11,8 +11,9 @@
 
 Read Mount & Blade II: Bannerlord module metadata (SubModule.xml), compute a valid module load order, and read and write the launcher's LauncherData.xml. Package `bannerlord`, module `github.com/Rethunk-Tech/go-bannerlord`.
 
-<!-- scaffold: one short paragraph on what the package guarantees and why it exists, in plain
-words. -->
+It reads a module's `SubModule.xml` (id, version, dependencies, load-before/after hints, DLLs), sorts a set of modules
+into a load order the game accepts, and edits the launcher's enabled list without losing fields it does not know.
+Input is treated as untrusted. No file or network access.
 
 ## Quick start
 
@@ -24,7 +25,11 @@ A worked example and the contracts: [HUMANS.md](HUMANS.md).
 
 ## Features
 
-<!-- scaffold: 3 to 6 bullets, each a capability a caller can rely on. No roadmap. -->
+- `ParseModule`: SubModule.xml with typed `Version`, dependencies and metadata.
+- `Version.Compare`: Bannerlord versions such as `v1.2.3.0`, `e1.0.0` and `v1.2.*`.
+- `Sort`: deterministic topological order, official modules first, problems returned as typed `Issue`s.
+- `Launcher`: read and rewrite `LauncherData.xml`'s enabled set and order, keeping unknown elements.
+- Bounded input: size and depth limits, DOCTYPE refused, ids validated.
 
 ## Documentation
 

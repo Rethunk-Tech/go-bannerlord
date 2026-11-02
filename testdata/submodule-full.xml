@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Module>
+  <Name value="Example Mod"/>
+  <Id value="Example.Mod"/>
+  <Version value="v1.2.3.0"/>
+  <DefaultModule value="false"/>
+  <ModuleType value="Community"/>
+  <ModuleCategory value="Singleplayer"/>
+  <Official value="false"/>
+  <DependedModules>
+    <DependedModule Id="Native" DependentVersion="v1.2.0"/>
+    <DependedModule Id="Bannerlord.Harmony" Optional="true"/>
+  </DependedModules>
+  <DependedModuleMetadatas>
+    <DependedModuleMetadata id="Native" order="LoadAfterThis" version="v1.2.*"/>
+    <DependedModuleMetadata id="Bannerlord.Harmony" order="LoadBeforeThis" optional="true"/>
+    <DependedModuleMetadata id="Bad.Mod" incompatible="true"/>
+  </DependedModuleMetadatas>
+  <ModulesToLoadAfterThis>
+    <Module Id="Native"/>
+  </ModulesToLoadAfterThis>
+  <IncompatibleModules>
+    <Module Id="Bad.Two"/>
+  </IncompatibleModules>
+  <SubModules>
+    <SubModule>
+      <Name value="Example"/>
+      <DLLName value="Example.Mod.dll"/>
+      <SubModuleClassType value="Example.Mod.Main"/>
+    </SubModule>
+  </SubModules>
+</Module>

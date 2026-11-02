@@ -1,0 +1,3 @@
+<?xml version="1.0"?>
+<!DOCTYPE Module [<!ENTITY a "aaaa">]>
+<Module><Id value="X"/></Module>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserData>
+  <GameType>Singleplayer</GameType>
+  <SingleplayerData>
+    <ModDatas>
+      <UserModData>
+        <Id>Native</Id>
+        <LastKnownVersion>v1.2.9</LastKnownVersion>
+        <IsSelected>true</IsSelected>
+      </UserModData>
+      <UserModData>
+        <Id>Old.Mod</Id>
+        <IsSelected>true</IsSelected>
+      </UserModData>
+    </ModDatas>
+    <Unknown attr="kept">data</Unknown>
+  </SingleplayerData>
+  <MultiplayerData>
+    <ModDatas />
+  </MultiplayerData>
+  <DelayedStart>false</DelayedStart>
+</UserData>
