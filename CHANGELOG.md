@@ -6,6 +6,10 @@ Notable changes to `go-bannerlord`. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Fuzz targets for `ParseModule` and `ParseLauncher`, seeded from `testdata`.
+
 ## [0.1.0] - 2026-11-02
 
 ### Added
