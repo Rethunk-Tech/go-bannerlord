@@ -70,61 +70,83 @@ func ParseModule(r io.Reader) (Module, error) {
 	m.Official = flag(root, "Official") || ty == "Official" || ty == "OfficialOptional"
 	m.Default = flag(root, "DefaultModule")
 
-	if deps := root.child("DependedModules"); deps != nil {
-		for _, d := range deps.childrenNamed("DependedModule") {
-			dep, err := parseDependency(d)
-			if err != nil {
-				return Module{}, err
-			}
-			m.Depends = append(m.Depends, dep)
+	if m.Depends, err = parseChildren(root, "DependedModules", "DependedModule", parseDependency); err != nil {
+		return Module{}, err
+	}
+	if m.Metadata, err = parseChildren(root, "DependedModuleMetadatas", "DependedModuleMetadata", parseMetadata); err != nil {
+		return Module{}, err
+	}
+	for _, list := range []struct {
+		container string
+		meta      Metadata
+	}{
+		{"ModulesToLoadAfterThis", Metadata{Order: LoadAfterThis, Optional: true}},
+		{"IncompatibleModules", Metadata{Optional: true, Incompatible: true}},
+	} {
+		if m.Metadata, err = appendModuleRefs(m.Metadata, root, list.container, list.meta); err != nil {
+			return Module{}, err
 		}
 	}
-	if metas := root.child("DependedModuleMetadatas"); metas != nil {
-		for _, d := range metas.childrenNamed("DependedModuleMetadata") {
-			meta, err := parseMetadata(d)
-			if err != nil {
-				return Module{}, err
-			}
-			m.Metadata = append(m.Metadata, meta)
-		}
-	}
-	if l := root.child("ModulesToLoadAfterThis"); l != nil {
-		for _, d := range l.childrenNamed("Module") {
-			id, ok := d.attr("Id")
-			if !ok {
-				continue
-			}
-			if !validID(id) {
-				return Module{}, fmt.Errorf("%w: module id %q", ErrInvalid, id)
-			}
-			m.Metadata = append(m.Metadata, Metadata{ID: id, Order: LoadAfterThis, Optional: true})
-		}
-	}
-	if l := root.child("IncompatibleModules"); l != nil {
-		for _, d := range l.childrenNamed("Module") {
-			id, ok := d.attr("Id")
-			if !ok {
-				continue
-			}
-			if !validID(id) {
-				return Module{}, fmt.Errorf("%w: module id %q", ErrInvalid, id)
-			}
-			m.Metadata = append(m.Metadata, Metadata{ID: id, Optional: true, Incompatible: true})
-		}
-	}
-	if subs := root.child("SubModules"); subs != nil {
-		for _, s := range subs.childrenNamed("SubModule") {
-			dll, ok := s.valueOf("DLLName")
-			if !ok || dll == "" {
-				continue
-			}
-			if strings.ContainsAny(dll, "/\\\x00") || dll == ".." {
-				return Module{}, fmt.Errorf("%w: DLLName %q", ErrInvalid, dll)
-			}
-			m.DLLs = append(m.DLLs, dll)
-		}
+	if m.DLLs, err = parseDLLs(root); err != nil {
+		return Module{}, err
 	}
 	return m, nil
+}
+
+// parseChildren parses each item element under the container child of root, or returns nil when there is no container.
+func parseChildren[T any](root *node, container, item string, parse func(*node) (T, error)) ([]T, error) {
+	c := root.child(container)
+	if c == nil {
+		return nil, nil
+	}
+	var out []T
+	for _, d := range c.childrenNamed(item) {
+		v, err := parse(d)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// appendModuleRefs appends tmpl, with each Module id of the container child, to metas. A Module without an Id is skipped.
+func appendModuleRefs(metas []Metadata, root *node, container string, tmpl Metadata) ([]Metadata, error) {
+	l := root.child(container)
+	if l == nil {
+		return metas, nil
+	}
+	for _, d := range l.childrenNamed("Module") {
+		id, ok := d.attr("Id")
+		if !ok {
+			continue
+		}
+		if !validID(id) {
+			return nil, fmt.Errorf("%w: module id %q", ErrInvalid, id)
+		}
+		tmpl.ID = id
+		metas = append(metas, tmpl)
+	}
+	return metas, nil
+}
+
+func parseDLLs(root *node) ([]string, error) {
+	subs := root.child("SubModules")
+	if subs == nil {
+		return nil, nil
+	}
+	var dlls []string
+	for _, s := range subs.childrenNamed("SubModule") {
+		dll, ok := s.valueOf("DLLName")
+		if !ok || dll == "" {
+			continue
+		}
+		if strings.ContainsAny(dll, "/\\\x00") || dll == ".." {
+			return nil, fmt.Errorf("%w: DLLName %q", ErrInvalid, dll)
+		}
+		dlls = append(dlls, dll)
+	}
+	return dlls, nil
 }
 
 func flag(n *node, name string) bool {

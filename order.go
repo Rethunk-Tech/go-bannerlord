@@ -58,93 +58,26 @@ func (i Issue) String() string {
 // dependency does not remove its dependent.
 func Sort(modules []Module) ([]string, []Issue) {
 	var issues []Issue
-	byID := make(map[string]*Module, len(modules))
+	g := &loadGraph{
+		byID:  make(map[string]*Module, len(modules)),
+		after: make(map[string][]string, len(modules)),
+		indeg: make(map[string]int, len(modules)),
+		seen:  make(map[[2]string]bool),
+	}
 	var ids []string
 	for i := range modules {
 		m := &modules[i]
-		if _, dup := byID[m.ID]; dup {
+		if _, dup := g.byID[m.ID]; dup {
 			issues = append(issues, Issue{Kind: DuplicateModule, Module: m.ID})
 			continue
 		}
-		byID[m.ID] = m
+		g.byID[m.ID] = m
 		ids = append(ids, m.ID)
 	}
-
-	after := make(map[string][]string, len(ids)) // before -> modules that must follow it
-	indeg := make(map[string]int, len(ids))
-	seen := make(map[[2]string]bool)
-	edge := func(before, follower string) {
-		k := [2]string{before, follower}
-		if before == follower || seen[k] {
-			return
-		}
-		seen[k] = true
-		after[before] = append(after[before], follower)
-		indeg[follower]++
-	}
-
 	for _, id := range ids {
-		m := byID[id]
-		for _, d := range m.Depends {
-			dm, ok := byID[d.ID]
-			switch {
-			case !ok && !d.Optional:
-				issues = append(issues, Issue{Kind: MissingDependency, Module: id, Other: d.ID})
-			case ok:
-				edge(d.ID, id)
-				if !d.Version.IsZero() && dm.Version.Compare(d.Version) < 0 {
-					issues = append(issues, Issue{Kind: OutdatedDependency, Module: id, Other: d.ID, Detail: d.Version.String() + " or newer, found " + dm.Version.String()})
-				}
-			}
-		}
-		for _, md := range m.Metadata {
-			_, ok := byID[md.ID]
-			if md.Incompatible && ok {
-				issues = append(issues, Issue{Kind: IncompatibleModule, Module: id, Other: md.ID})
-			}
-			switch md.Order {
-			case LoadBeforeThis:
-				if ok {
-					edge(md.ID, id)
-				} else if !md.Optional {
-					issues = append(issues, Issue{Kind: MissingDependency, Module: id, Other: md.ID})
-				}
-			case LoadAfterThis:
-				if ok {
-					edge(id, md.ID)
-				}
-			}
-		}
+		issues = append(issues, g.constrain(id)...)
 	}
-
-	less := func(a, b string) int {
-		ao, bo := byID[a].Official, byID[b].Official
-		if ao != bo {
-			if ao {
-				return -1
-			}
-			return 1
-		}
-		return strings.Compare(a, b)
-	}
-
-	var ready, order []string
-	for _, id := range ids {
-		if indeg[id] == 0 {
-			ready = append(ready, id)
-		}
-	}
-	for len(ready) > 0 {
-		slices.SortFunc(ready, less)
-		id := ready[0]
-		ready = ready[1:]
-		order = append(order, id)
-		for _, f := range after[id] {
-			if indeg[f]--; indeg[f] == 0 {
-				ready = append(ready, f)
-			}
-		}
-	}
+	order := g.topoSort(ids)
 	if len(order) < len(ids) {
 		var stuck []string
 		for _, id := range ids {
@@ -152,8 +85,96 @@ func Sort(modules []Module) ([]string, []Issue) {
 				stuck = append(stuck, id)
 			}
 		}
-		slices.SortFunc(stuck, less)
+		slices.SortFunc(stuck, g.less)
 		issues = append(issues, Issue{Kind: CycleDetected, Modules: stuck})
 	}
 	return order, issues
+}
+
+// loadGraph holds the ordering constraints between the modules of one Sort.
+type loadGraph struct {
+	byID  map[string]*Module
+	after map[string][]string // before -> modules that must follow it
+	indeg map[string]int
+	seen  map[[2]string]bool
+}
+
+func (g *loadGraph) edge(before, follower string) {
+	k := [2]string{before, follower}
+	if before == follower || g.seen[k] {
+		return
+	}
+	g.seen[k] = true
+	g.after[before] = append(g.after[before], follower)
+	g.indeg[follower]++
+}
+
+// constrain adds the edges module id declares and returns the issues its dependencies and metadata raise.
+func (g *loadGraph) constrain(id string) []Issue {
+	var issues []Issue
+	m := g.byID[id]
+	for _, d := range m.Depends {
+		dm, ok := g.byID[d.ID]
+		switch {
+		case !ok && !d.Optional:
+			issues = append(issues, Issue{Kind: MissingDependency, Module: id, Other: d.ID})
+		case ok:
+			g.edge(d.ID, id)
+			if !d.Version.IsZero() && dm.Version.Compare(d.Version) < 0 {
+				issues = append(issues, Issue{Kind: OutdatedDependency, Module: id, Other: d.ID, Detail: d.Version.String() + " or newer, found " + dm.Version.String()})
+			}
+		}
+	}
+	for _, md := range m.Metadata {
+		_, ok := g.byID[md.ID]
+		if md.Incompatible && ok {
+			issues = append(issues, Issue{Kind: IncompatibleModule, Module: id, Other: md.ID})
+		}
+		switch md.Order {
+		case LoadBeforeThis:
+			if ok {
+				g.edge(md.ID, id)
+			} else if !md.Optional {
+				issues = append(issues, Issue{Kind: MissingDependency, Module: id, Other: md.ID})
+			}
+		case LoadAfterThis:
+			if ok {
+				g.edge(id, md.ID)
+			}
+		}
+	}
+	return issues
+}
+
+func (g *loadGraph) less(a, b string) int {
+	ao, bo := g.byID[a].Official, g.byID[b].Official
+	if ao != bo {
+		if ao {
+			return -1
+		}
+		return 1
+	}
+	return strings.Compare(a, b)
+}
+
+// topoSort is Kahn's algorithm, taking the least ready module each step; modules in or behind a cycle are left out.
+func (g *loadGraph) topoSort(ids []string) []string {
+	var ready, order []string
+	for _, id := range ids {
+		if g.indeg[id] == 0 {
+			ready = append(ready, id)
+		}
+	}
+	for len(ready) > 0 {
+		slices.SortFunc(ready, g.less)
+		id := ready[0]
+		ready = ready[1:]
+		order = append(order, id)
+		for _, f := range g.after[id] {
+			if g.indeg[f]--; g.indeg[f] == 0 {
+				ready = append(ready, f)
+			}
+		}
+	}
+	return order
 }
