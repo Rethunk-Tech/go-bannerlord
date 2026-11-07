@@ -6,16 +6,18 @@ Notable changes to `go-bannerlord`. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-07
+
+### Added
+
+- Fuzz targets for `ParseModule` and `ParseLauncher`, seeded from `testdata`.
+
 ### Fixed
 
 - `.` and `..` are no longer valid module ids.
 - `DLLName` must be a plain file name: no drive or stream colon, Windows device name, wildcard, control character, or trailing dot or space.
 - Text split by comments in a large document parses in linear time.
 - `Launcher.SetMods` keeps every entry of a module listed twice in the launcher file, with its unknown fields.
-
-### Added
-
-- Fuzz targets for `ParseModule` and `ParseLauncher`, seeded from `testdata`.
 
 ## [0.1.0] - 2026-11-02
 
@@ -25,5 +27,6 @@ Notable changes to `go-bannerlord`. The format follows
 - `Sort`: dependency and load-order sort with official modules first; cycles, missing, outdated, incompatible and duplicate modules are typed issues.
 - `Launcher`: read and rewrite LauncherData.xml's enabled mod set and order, keeping unknown elements.
 
-[Unreleased]: https://github.com/Rethunk-Tech/go-bannerlord/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Rethunk-Tech/go-bannerlord/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Rethunk-Tech/go-bannerlord/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Rethunk-Tech/go-bannerlord/releases/tag/v0.1.0
