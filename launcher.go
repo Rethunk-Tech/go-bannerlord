@@ -89,7 +89,7 @@ func (l *Launcher) SetMods(mode Mode, enabled []string) error {
 	var rest []*node
 	for _, e := range l.entries(mode) {
 		id := e.textOf("Id")
-		if want[id] {
+		if want[id] && existing[id] == nil {
 			existing[id] = e
 		} else {
 			setText(e, "IsSelected", "false")

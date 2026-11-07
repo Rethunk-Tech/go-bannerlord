@@ -141,12 +141,30 @@ func parseDLLs(root *node) ([]string, error) {
 		if !ok || dll == "" {
 			continue
 		}
-		if strings.ContainsAny(dll, "/\\\x00") || dll == ".." {
+		if !validDLLName(dll) {
 			return nil, fmt.Errorf("%w: DLLName %q", ErrInvalid, dll)
 		}
 		dlls = append(dlls, dll)
 	}
 	return dlls, nil
+}
+
+// validDLLName accepts a plain file name: one element that Windows cannot read as a drive-relative path, an
+// alternate data stream or a device (CON, NUL, COM1 and the like, with or without an extension).
+func validDLLName(name string) bool {
+	if name == "." || name == ".." || strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
+		return false
+	}
+	if strings.ContainsAny(name, "/\\:*?\"<>|") || strings.ContainsFunc(name, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		return false
+	}
+	stem, _, _ := strings.Cut(name, ".")
+	switch strings.ToUpper(strings.TrimRight(stem, " ")) {
+	case "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+		"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9":
+		return false
+	}
+	return true
 }
 
 func flag(n *node, name string) bool {

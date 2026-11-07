@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	bannerlord "github.com/Rethunk-Tech/go-bannerlord"
 )
@@ -219,5 +220,74 @@ func TestLauncherRoundTrip(t *testing.T) {
 	}
 	if _, err := bannerlord.ParseLauncher(strings.NewReader("<UserData><SingleplayerData><ModDatas><UserModData><Id>../x</Id></UserModData></ModDatas></SingleplayerData></UserData>")); err == nil {
 		t.Error("bad launcher id accepted")
+	}
+}
+
+func TestDotIDsAreRefused(t *testing.T) {
+	t.Parallel()
+	for _, id := range []string{".", ".."} {
+		doc := `<Module><Id value="` + id + `"/></Module>`
+		if _, err := bannerlord.ParseModule(strings.NewReader(doc)); err == nil {
+			t.Errorf("module id %q accepted", id)
+		}
+		dep := `<Module><Id value="M"/><DependedModules><DependedModule Id="` + id + `"/></DependedModules></Module>`
+		if _, err := bannerlord.ParseModule(strings.NewReader(dep)); err == nil {
+			t.Errorf("dependency id %q accepted", id)
+		}
+	}
+}
+
+func TestDLLNamesMustBePlainFileNames(t *testing.T) {
+	t.Parallel()
+	for _, dll := range []string{"D:evil.dll", ":ads.dll", "a.dll:stream", "CON.dll", "nul", "com1.x.dll", "a.dll.", "a.dll ", "..", "a/b.dll", `a\b.dll`} {
+		doc := `<Module><Id value="M"/><SubModules><SubModule><DLLName value="` + dll + `"/></SubModule></SubModules></Module>`
+		if _, err := bannerlord.ParseModule(strings.NewReader(doc)); err == nil {
+			t.Errorf("DLLName %q accepted", dll)
+		}
+	}
+	ok := `<Module><Id value="M"/><SubModules><SubModule><DLLName value="Console.Mod.dll"/></SubModule></SubModules></Module>`
+	if _, err := bannerlord.ParseModule(strings.NewReader(ok)); err != nil {
+		t.Errorf("a plain name was refused: %v", err)
+	}
+}
+
+// Comments split one text run into many fragments; joining them must not recopy the whole run each time.
+func TestCommentSplitTextParsesInLinearTime(t *testing.T) {
+	parse := func(body string) time.Duration {
+		start := time.Now()
+		if _, err := bannerlord.ParseModule(strings.NewReader(`<Module><Id value="m"/><Junk>` + body + `</Junk></Module>`)); err != nil {
+			t.Fatal(err)
+		}
+		return time.Since(start)
+	}
+	const fragments = bannerlord.MaxXMLSize/8 - 64
+	plain := parse(strings.Repeat("a", fragments*8))
+	split := parse(strings.Repeat("a<!---->", fragments))
+	if split > 20*plain+50*time.Millisecond {
+		t.Fatalf("comment-split text took %v against %v for the same bytes unsplit", split, plain)
+	}
+}
+
+func TestSetModsKeepsADuplicateEntrysFields(t *testing.T) {
+	t.Parallel()
+	doc := `<UserData><SingleplayerData><ModDatas>` +
+		`<UserModData><Id>A</Id><IsSelected>true</IsSelected><Foo>1</Foo></UserModData>` +
+		`<UserModData><Id>A</Id><IsSelected>true</IsSelected><Foo>2</Foo></UserModData>` +
+		`</ModDatas></SingleplayerData></UserData>`
+	l, err := bannerlord.ParseLauncher(strings.NewReader(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := l.SetMods(bannerlord.Singleplayer, []string{"A"}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := l.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"<Foo>1</Foo>", "<Foo>2</Foo>"} {
+		if !strings.Contains(string(out), s) {
+			t.Errorf("lost %s in\n%s", s, out)
+		}
 	}
 }

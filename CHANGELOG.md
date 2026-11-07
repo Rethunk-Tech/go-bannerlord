@@ -6,6 +6,13 @@ Notable changes to `go-bannerlord`. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `.` and `..` are no longer valid module ids.
+- `DLLName` must be a plain file name: no drive or stream colon, Windows device name, wildcard, control character, or trailing dot or space.
+- Text split by comments in a large document parses in linear time.
+- `Launcher.SetMods` keeps every entry of a module listed twice in the launcher file, with its unknown fields.
+
 ### Added
 
 - Fuzz targets for `ParseModule` and `ParseLauncher`, seeded from `testdata`.

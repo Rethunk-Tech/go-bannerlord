@@ -29,6 +29,9 @@ type node struct {
 	attrs []xml.Attr
 	kids  []*node
 	text  string
+	// pending collects an open element's text; comments split it into many fragments, and appending to a string
+	// each time would copy the whole of it again.
+	pending []byte
 }
 
 func parseTree(r io.Reader) (*node, error) {
@@ -76,11 +79,13 @@ func parseTree(r io.Reader) (*node, error) {
 			}
 			stack = append(stack, n)
 		case xml.EndElement:
+			top := stack[len(stack)-1]
+			top.text, top.pending = string(top.pending), nil
 			stack = stack[:len(stack)-1]
 		case xml.CharData:
 			if len(stack) > 0 {
 				top := stack[len(stack)-1]
-				top.text += string(t)
+				top.pending = append(top.pending, t...)
 			}
 		}
 	}
@@ -158,7 +163,7 @@ func (n *node) write(enc *xml.Encoder) error {
 }
 
 func validID(id string) bool {
-	if id == "" || len(id) > maxIDLen {
+	if id == "" || id == "." || id == ".." || len(id) > maxIDLen {
 		return false
 	}
 	for _, c := range id {
