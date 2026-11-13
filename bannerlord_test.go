@@ -225,7 +225,7 @@ func TestLauncherRoundTrip(t *testing.T) {
 
 func TestDotIDsAreRefused(t *testing.T) {
 	t.Parallel()
-	for _, id := range []string{".", ".."} {
+	for _, id := range []string{".", "..", "CON", "nul", "COM1", "CON.txt", "M."} {
 		doc := `<Module><Id value="` + id + `"/></Module>`
 		if _, err := bannerlord.ParseModule(strings.NewReader(doc)); err == nil {
 			t.Errorf("module id %q accepted", id)

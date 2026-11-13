@@ -163,7 +163,7 @@ func (n *node) write(enc *xml.Encoder) error {
 }
 
 func validID(id string) bool {
-	if id == "" || id == "." || id == ".." || len(id) > maxIDLen {
+	if id == "" || len(id) > maxIDLen {
 		return false
 	}
 	for _, c := range id {
@@ -172,7 +172,8 @@ func validID(id string) bool {
 			return false
 		}
 	}
-	return true
+	// Ids become file names; validDLLName already rejects reserved device stems and trailing dots.
+	return validDLLName(id)
 }
 
 const maxIDLen = 128
