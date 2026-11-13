@@ -126,7 +126,10 @@ func (g *loadGraph) constrain(id string) []Issue {
 		}
 	}
 	for _, md := range m.Metadata {
-		_, ok := g.byID[md.ID]
+		dm, ok := g.byID[md.ID]
+		if ok && !md.Version.IsZero() && dm.Version.Compare(md.Version) < 0 {
+			issues = append(issues, Issue{Kind: OutdatedDependency, Module: id, Other: md.ID, Detail: md.Version.String() + " or newer, found " + dm.Version.String()})
+		}
 		if md.Incompatible && ok {
 			issues = append(issues, Issue{Kind: IncompatibleModule, Module: id, Other: md.ID})
 		}
