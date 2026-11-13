@@ -2,11 +2,13 @@ package bannerlord
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf16"
 )
 
 // MaxXMLSize is the largest XML document the package reads, in bytes.
@@ -34,6 +36,19 @@ type node struct {
 	pending []byte
 }
 
+// utf16ToUTF8 converts BOM-marked UTF-16 (either byte order) to UTF-8; a trailing odd byte is dropped.
+func utf16ToUTF8(b []byte) []byte {
+	order := binary.LittleEndian.Uint16
+	if b[0] == 0xFE {
+		order = binary.BigEndian.Uint16
+	}
+	units := make([]uint16, 0, len(b)/2-1)
+	for i := 2; i+1 < len(b); i += 2 {
+		units = append(units, order(b[i:]))
+	}
+	return []byte(string(utf16.Decode(units)))
+}
+
 func parseTree(r io.Reader) (*node, error) {
 	data, err := io.ReadAll(io.LimitReader(r, MaxXMLSize+1))
 	if err != nil {
@@ -43,8 +58,20 @@ func parseTree(r io.Reader) (*node, error) {
 		return nil, ErrTooLarge
 	}
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
+	utf16Decoded := false
+	if len(data) >= 2 && (data[0] == 0xFF && data[1] == 0xFE || data[0] == 0xFE && data[1] == 0xFF) {
+		data = utf16ToUTF8(data)
+		utf16Decoded = true
+	}
 
 	dec := xml.NewDecoder(bytes.NewReader(data))
+	// The declaration of a BOM-marked UTF-16 file still says utf-16 after utf16ToUTF8 has converted it.
+	dec.CharsetReader = func(label string, in io.Reader) (io.Reader, error) {
+		if utf16Decoded && strings.HasPrefix(strings.ToLower(label), "utf-16") {
+			return in, nil
+		}
+		return nil, fmt.Errorf("%w: unsupported encoding %q", ErrInvalid, label)
+	}
 	var (
 		root  *node
 		stack []*node

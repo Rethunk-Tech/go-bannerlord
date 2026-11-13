@@ -291,3 +291,21 @@ func TestSetModsKeepsADuplicateEntrysFields(t *testing.T) {
 		}
 	}
 }
+
+func TestParseModuleReadsUTF16(t *testing.T) {
+	t.Parallel()
+	const doc = `<?xml version="1.0" encoding="utf-16"?><Module><Id value="m"/></Module>`
+	for name, order := range map[string]func(b []byte, u uint16) []byte{
+		"LE": func(b []byte, u uint16) []byte { return append(b, byte(u), byte(u>>8)) },
+		"BE": func(b []byte, u uint16) []byte { return append(b, byte(u>>8), byte(u)) },
+	} {
+		b := order(nil, 0xFEFF)
+		for _, u := range utf16.Encode([]rune(doc)) {
+			b = order(b, u)
+		}
+		m, err := bannerlord.ParseModule(strings.NewReader(string(b)))
+		if err != nil || m.ID != "m" {
+			t.Errorf("%s: id %q err %v", name, m.ID, err)
+		}
+	}
+}
