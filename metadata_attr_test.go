@@ -39,3 +39,17 @@ func TestMetadataVersionOutdated(t *testing.T) {
 	}
 	t.Fatalf("issues=%v, want OutdatedDependency A/Lib", issues)
 }
+
+// .NET's bool.Parse, which the game and BUTR use, ignores case and surrounding white space.
+func TestBooleansParseLikeDotNet(t *testing.T) {
+	const xml = `<Module><Id value="M"/><Official value="True"/><DefaultModule value=" TRUE "/>` +
+		`<DependedModules><DependedModule Id="Lib" Optional="True"/></DependedModules>` +
+		`<DependedModuleMetadatas><DependedModuleMetadata id="X" optional="TRUE" incompatible="True"/></DependedModuleMetadatas></Module>`
+	m, err := ParseModule(strings.NewReader(xml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.Official || !m.Default || !m.Depends[0].Optional || !m.Metadata[0].Optional || !m.Metadata[0].Incompatible {
+		t.Fatalf("module = %+v", m)
+	}
+}

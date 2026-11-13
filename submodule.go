@@ -167,14 +167,17 @@ func validDLLName(name string) bool {
 	return true
 }
 
+// isTrue is .NET's bool.Parse: case-insensitive, white space around it ignored.
+func isTrue(v string) bool { return strings.EqualFold(strings.TrimSpace(v), "true") }
+
 func flag(n *node, name string) bool {
 	v, _ := n.valueOf(name)
-	return v == "true"
+	return isTrue(v)
 }
 
 func attrFlag(n *node, name string) bool {
 	v, _ := n.attr(name)
-	return v == "true"
+	return isTrue(v)
 }
 
 func attrVersion(n *node, name string) Version {
