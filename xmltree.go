@@ -97,7 +97,7 @@ func parseTree(r io.Reader) (*node, error) {
 
 func (n *node) attr(name string) (string, bool) {
 	for _, a := range n.attrs {
-		if a.Name.Local == name {
+		if strings.EqualFold(a.Name.Local, name) {
 			return a.Value, true
 		}
 	}
