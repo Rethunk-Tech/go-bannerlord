@@ -1,11 +1,13 @@
 package bannerlord_test
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	bannerlord "github.com/Rethunk-Tech/go-bannerlord"
 )
@@ -307,5 +309,21 @@ func TestParseModuleReadsUTF16(t *testing.T) {
 		if err != nil || m.ID != "m" {
 			t.Errorf("%s: id %q err %v", name, m.ID, err)
 		}
+	}
+}
+
+func TestSortLargeSetIsFast(t *testing.T) {
+	t.Parallel()
+	mods := make([]bannerlord.Module, 5000)
+	for i := range mods {
+		mods[i] = mod(fmt.Sprintf("M%05d", 4999-i))
+	}
+	start := time.Now()
+	order, _ := bannerlord.Sort(mods)
+	if len(order) != 5000 || order[0] != "M00000" || order[4999] != "M04999" {
+		t.Fatalf("order wrong: %d %q", len(order), order[0])
+	}
+	if d := time.Since(start); d > 500*time.Millisecond {
+		t.Fatalf("Sort of 5000 modules took %v", d)
 	}
 }

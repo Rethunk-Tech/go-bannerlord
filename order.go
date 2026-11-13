@@ -1,6 +1,7 @@
 package bannerlord
 
 import (
+	"container/heap"
 	"fmt"
 	"slices"
 	"strings"
@@ -162,22 +163,38 @@ func (g *loadGraph) less(a, b string) int {
 
 // topoSort is Kahn's algorithm, taking the least ready module each step; modules in or behind a cycle are left out.
 func (g *loadGraph) topoSort(ids []string) []string {
-	var ready, order []string
+	ready := &readyHeap{g: g}
+	var order []string
 	for _, id := range ids {
 		if g.indeg[id] == 0 {
-			ready = append(ready, id)
+			heap.Push(ready, id)
 		}
 	}
-	for len(ready) > 0 {
-		slices.SortFunc(ready, g.less)
-		id := ready[0]
-		ready = ready[1:]
+	for ready.Len() > 0 {
+		id, _ := heap.Pop(ready).(string)
 		order = append(order, id)
 		for _, f := range g.after[id] {
 			if g.indeg[f]--; g.indeg[f] == 0 {
-				ready = append(ready, f)
+				heap.Push(ready, f)
 			}
 		}
 	}
 	return order
+}
+
+// readyHeap is a min-heap of module ids under loadGraph.less.
+type readyHeap struct {
+	g   *loadGraph
+	ids []string
+}
+
+func (h *readyHeap) Len() int           { return len(h.ids) }
+func (h *readyHeap) Less(i, j int) bool { return h.g.less(h.ids[i], h.ids[j]) < 0 }
+func (h *readyHeap) Swap(i, j int)      { h.ids[i], h.ids[j] = h.ids[j], h.ids[i] }
+func (h *readyHeap) Push(x any)         { h.ids = append(h.ids, x.(string)) }
+func (h *readyHeap) Pop() any {
+	n := len(h.ids) - 1
+	x := h.ids[n]
+	h.ids = h.ids[:n]
+	return x
 }
