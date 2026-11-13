@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 // Order says where a module sits relative to the module that lists it. The empty Order is
@@ -159,9 +160,17 @@ func validDLLName(name string) bool {
 		return false
 	}
 	stem, _, _ := strings.Cut(name, ".")
-	switch strings.ToUpper(strings.TrimRight(stem, " ")) {
-	case "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-		"LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9":
+	upper := strings.ToUpper(strings.TrimRight(stem, " "))
+	switch upper {
+	case "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$":
+		return false
+	}
+	// Windows reserves ports 0 to 9 and the superscripts ¹, ² and ³.
+	port, ok := strings.CutPrefix(upper, "COM")
+	if !ok {
+		port, ok = strings.CutPrefix(upper, "LPT")
+	}
+	if ok && utf8.RuneCountInString(port) == 1 && strings.ContainsAny(port, "0123456789¹²³") {
 		return false
 	}
 	return true

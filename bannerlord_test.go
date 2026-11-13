@@ -239,7 +239,7 @@ func TestDotIDsAreRefused(t *testing.T) {
 
 func TestDLLNamesMustBePlainFileNames(t *testing.T) {
 	t.Parallel()
-	for _, dll := range []string{"D:evil.dll", ":ads.dll", "a.dll:stream", "CON.dll", "nul", "com1.x.dll", "a.dll.", "a.dll ", "..", "a/b.dll", `a\b.dll`} {
+	for _, dll := range []string{"D:evil.dll", ":ads.dll", "a.dll:stream", "CON.dll", "nul", "com1.x.dll", "COM0", "lpt0.dll", "COM¹.dll", "LPT³", "CONIN$", "conout$.dll", "a.dll.", "a.dll ", "..", "a/b.dll", `a\b.dll`} {
 		doc := `<Module><Id value="M"/><SubModules><SubModule><DLLName value="` + dll + `"/></SubModule></SubModules></Module>`
 		if _, err := bannerlord.ParseModule(strings.NewReader(doc)); err == nil {
 			t.Errorf("DLLName %q accepted", dll)
