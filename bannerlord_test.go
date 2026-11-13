@@ -1,6 +1,7 @@
 package bannerlord_test
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"reflect"
@@ -298,8 +299,8 @@ func TestParseModuleReadsUTF16(t *testing.T) {
 	t.Parallel()
 	const doc = `<?xml version="1.0" encoding="utf-16"?><Module><Id value="m"/></Module>`
 	for name, order := range map[string]func(b []byte, u uint16) []byte{
-		"LE": func(b []byte, u uint16) []byte { return append(b, byte(u), byte(u>>8)) },
-		"BE": func(b []byte, u uint16) []byte { return append(b, byte(u>>8), byte(u)) },
+		"LE": func(b []byte, u uint16) []byte { return binary.LittleEndian.AppendUint16(b, u) },
+		"BE": func(b []byte, u uint16) []byte { return binary.BigEndian.AppendUint16(b, u) },
 	} {
 		b := order(nil, 0xFEFF)
 		for _, u := range utf16.Encode([]rune(doc)) {

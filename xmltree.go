@@ -36,6 +36,24 @@ type node struct {
 	pending []byte
 }
 
+// decodeBOMUTF16 converts a BOM-marked UTF-16 document to UTF-8 and reports whether it did.
+func decodeBOMUTF16(data []byte) ([]byte, bool) {
+	if len(data) >= 2 && (data[0] == 0xFF && data[1] == 0xFE || data[0] == 0xFE && data[1] == 0xFF) {
+		return utf16ToUTF8(data), true
+	}
+	return data, false
+}
+
+// utf16Declaration accepts a utf-16 encoding declaration only for a document decodeBOMUTF16 already converted.
+func utf16Declaration(decoded bool) func(string, io.Reader) (io.Reader, error) {
+	return func(label string, in io.Reader) (io.Reader, error) {
+		if decoded && strings.HasPrefix(strings.ToLower(label), "utf-16") {
+			return in, nil
+		}
+		return nil, fmt.Errorf("%w: unsupported encoding %q", ErrInvalid, label)
+	}
+}
+
 // utf16ToUTF8 converts BOM-marked UTF-16 (either byte order) to UTF-8; a trailing odd byte is dropped.
 func utf16ToUTF8(b []byte) []byte {
 	order := binary.LittleEndian.Uint16
@@ -58,20 +76,10 @@ func parseTree(r io.Reader) (*node, error) {
 		return nil, ErrTooLarge
 	}
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
-	utf16Decoded := false
-	if len(data) >= 2 && (data[0] == 0xFF && data[1] == 0xFE || data[0] == 0xFE && data[1] == 0xFF) {
-		data = utf16ToUTF8(data)
-		utf16Decoded = true
-	}
+	data, utf16Decoded := decodeBOMUTF16(data)
 
 	dec := xml.NewDecoder(bytes.NewReader(data))
-	// The declaration of a BOM-marked UTF-16 file still says utf-16 after utf16ToUTF8 has converted it.
-	dec.CharsetReader = func(label string, in io.Reader) (io.Reader, error) {
-		if utf16Decoded && strings.HasPrefix(strings.ToLower(label), "utf-16") {
-			return in, nil
-		}
-		return nil, fmt.Errorf("%w: unsupported encoding %q", ErrInvalid, label)
-	}
+	dec.CharsetReader = utf16Declaration(utf16Decoded)
 	var (
 		root  *node
 		stack []*node

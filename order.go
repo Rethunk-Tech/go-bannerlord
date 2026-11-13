@@ -191,7 +191,11 @@ type readyHeap struct {
 func (h *readyHeap) Len() int           { return len(h.ids) }
 func (h *readyHeap) Less(i, j int) bool { return h.g.less(h.ids[i], h.ids[j]) < 0 }
 func (h *readyHeap) Swap(i, j int)      { h.ids[i], h.ids[j] = h.ids[j], h.ids[i] }
-func (h *readyHeap) Push(x any)         { h.ids = append(h.ids, x.(string)) }
+func (h *readyHeap) Push(x any) {
+	id, _ := x.(string)
+	h.ids = append(h.ids, id)
+}
+
 func (h *readyHeap) Pop() any {
 	n := len(h.ids) - 1
 	x := h.ids[n]
