@@ -46,7 +46,7 @@ func TestVersionCompare(t *testing.T) {
 			t.Errorf("%s vs %s = %d, want %d", c.a, c.b, got, c.want)
 		}
 	}
-	for _, bad := range []string{"", "v", "1.2.3", "x1.2.3", "v1.2", "v1.*", "v1.2.3.4.5", "v-1", "v1..2", "v1.99999999999"} {
+	for _, bad := range []string{"", "v", "1.2.3", "x1.2.3", "v1.2", "v1.*", "v1.2.3.4.5", "v-1", "v1..2", "v1.99999999999", "v1.-0.3", "v-0.1.2"} {
 		if _, err := bannerlord.ParseVersion(bad); err == nil {
 			t.Errorf("ParseVersion(%q) accepted", bad)
 		}

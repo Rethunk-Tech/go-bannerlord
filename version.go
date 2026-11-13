@@ -40,7 +40,7 @@ func ParseVersion(s string) (Version, error) {
 			break
 		}
 		num, err := strconv.Atoi(f)
-		if err != nil || num < 0 || num > maxVersionPart || f != strings.TrimSpace(f) || strings.HasPrefix(f, "+") {
+		if err != nil || num < 0 || num > maxVersionPart || f != strings.TrimSpace(f) || strings.HasPrefix(f, "+") || strings.HasPrefix(f, "-") {
 			return Version{}, fmt.Errorf("%w: version %q", ErrInvalid, s)
 		}
 		v.parts[i] = num
