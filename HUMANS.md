@@ -58,7 +58,7 @@ then `Marshal` and save the bytes.
 
 ## Requirements
 
-Go 1.27.3 or newer, plus `lefthook` and `gitleaks` on PATH if you want the git hooks.
+Go 1.27.4 or newer, plus `lefthook` and `gitleaks` on PATH if you want the git hooks.
 
 ```bash
 lefthook install
