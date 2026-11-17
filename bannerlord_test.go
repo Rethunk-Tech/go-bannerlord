@@ -2,6 +2,7 @@ package bannerlord_test
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -35,6 +36,7 @@ func TestVersionCompare(t *testing.T) {
 		{"e1.0.0", "v1.0.0", -1},
 		{"v1.2.*", "v1.2.0", 0},
 		{"v1.2.0.1", "v1.2.*", 1},
+		{"v1.2147483647.0", "v1.2147483646.0", 1},
 	}
 	for _, c := range cases {
 		a, err := bannerlord.ParseVersion(c.a)
@@ -104,9 +106,19 @@ func TestParseModuleRefuses(t *testing.T) {
 	if _, err := bannerlord.ParseModule(strings.NewReader(big)); err == nil {
 		t.Error("oversized document accepted")
 	}
-	deep := strings.Repeat("<a>", 100) + strings.Repeat("</a>", 100)
-	if _, err := bannerlord.ParseModule(strings.NewReader(deep)); err == nil {
-		t.Error("deep nesting accepted")
+	const prefix, suffix = `<Module><Id value="X"/><!--`, `--></Module>`
+	exact := prefix + strings.Repeat("a", bannerlord.MaxXMLSize-len(prefix)-len(suffix)) + suffix
+	if _, err := bannerlord.ParseModule(strings.NewReader(exact)); err != nil {
+		t.Errorf("MaxXMLSize document refused: %v", err)
+	}
+	nest := func(n int) string {
+		return `<Module><Id value="M"/>` + strings.Repeat("<x>", n) + strings.Repeat("</x>", n) + `</Module>`
+	}
+	if _, err := bannerlord.ParseModule(strings.NewReader(nest(31))); err != nil {
+		t.Errorf("32-deep module refused: %v", err)
+	}
+	if _, err := bannerlord.ParseModule(strings.NewReader(nest(32))); err == nil {
+		t.Error("33-deep module accepted")
 	}
 }
 
@@ -137,6 +149,11 @@ func TestSort(t *testing.T) {
 	old.Depends[0].Version, _ = bannerlord.ParseVersion("v2.0.0")
 	lib := mod("Lib")
 	lib.Version, _ = bannerlord.ParseVersion("v1.0.0")
+	need1, _ := bannerlord.ParseVersion("v1.0.0")
+	exactDep := mod("Need", "Lib")
+	exactDep.Depends[0].Version = need1
+	exactMeta := mod("Meta")
+	exactMeta.Metadata = []bannerlord.Metadata{{ID: "Lib", Version: need1}}
 	bad := mod("Bad")
 	bad.Metadata = []bannerlord.Metadata{{ID: "Lib", Incompatible: true}}
 
@@ -158,6 +175,8 @@ func TestSort(t *testing.T) {
 		{"cycle", []bannerlord.Module{mod("A", "B"), mod("B", "A"), mod("C", "A"), mod("D")}, []string{"D"}, []bannerlord.IssueKind{bannerlord.CycleDetected}},
 		{"missing dependency", []bannerlord.Module{missing, optional}, []string{"M", "O"}, []bannerlord.IssueKind{bannerlord.MissingDependency}},
 		{"outdated", []bannerlord.Module{old, lib}, []string{"Lib", "Old"}, []bannerlord.IssueKind{bannerlord.OutdatedDependency}},
+		{"exact dependency version", []bannerlord.Module{exactDep, lib}, []string{"Lib", "Need"}, nil},
+		{"exact metadata version", []bannerlord.Module{exactMeta, lib}, []string{"Lib", "Meta"}, nil},
 		{"incompatible", []bannerlord.Module{bad, lib}, []string{"Bad", "Lib"}, []bannerlord.IssueKind{bannerlord.IncompatibleModule}},
 		{"duplicate", []bannerlord.Module{mod("A"), mod("A")}, []string{"A"}, []bannerlord.IssueKind{bannerlord.DuplicateModule}},
 	}
@@ -188,6 +207,17 @@ func TestLauncherRoundTrip(t *testing.T) {
 	want := []bannerlord.LauncherMod{{ID: "Native", Selected: true}, {ID: "Old.Mod", Selected: true}}
 	if got := l.Mods(bannerlord.Singleplayer); !reflect.DeepEqual(got, want) {
 		t.Errorf("mods = %v", got)
+	}
+	if err := l.SetMods(bannerlord.Singleplayer, []string{"New.Mod", "Native"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.SetMods(bannerlord.Singleplayer, []string{"Native"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := l.Mods(bannerlord.Singleplayer); !reflect.DeepEqual(got, []bannerlord.LauncherMod{
+		{ID: "Native", Selected: true}, {ID: "New.Mod", Selected: false}, {ID: "Old.Mod", Selected: false},
+	}) {
+		t.Errorf("subset = %v", got)
 	}
 	if err := l.SetMods(bannerlord.Singleplayer, []string{"New.Mod", "Native"}); err != nil {
 		t.Fatal(err)
@@ -226,6 +256,18 @@ func TestLauncherRoundTrip(t *testing.T) {
 	}
 }
 
+func TestIDsAcceptLettersDigitsDotUnderscoreHyphen(t *testing.T) {
+	t.Parallel()
+	for _, id := range []string{"azAZ0-9_", strings.Repeat("a", 128)} {
+		if _, err := bannerlord.ParseModule(strings.NewReader(`<Module><Id value="` + id + `"/></Module>`)); err != nil {
+			t.Errorf("id %q refused: %v", id, err)
+		}
+	}
+	if _, err := bannerlord.ParseModule(strings.NewReader(`<Module><Id value="` + strings.Repeat("a", 129) + `"/></Module>`)); err == nil {
+		t.Error("129-char id accepted")
+	}
+}
+
 func TestDotIDsAreRefused(t *testing.T) {
 	t.Parallel()
 	for _, id := range []string{".", "..", "CON", "nul", "COM1", "CON.txt", "M."} {
@@ -248,9 +290,11 @@ func TestDLLNamesMustBePlainFileNames(t *testing.T) {
 			t.Errorf("DLLName %q accepted", dll)
 		}
 	}
-	ok := `<Module><Id value="M"/><SubModules><SubModule><DLLName value="Console.Mod.dll"/></SubModule></SubModules></Module>`
-	if _, err := bannerlord.ParseModule(strings.NewReader(ok)); err != nil {
-		t.Errorf("a plain name was refused: %v", err)
+	for _, dll := range []string{"Console.Mod.dll", "My Mod.dll"} {
+		ok := `<Module><Id value="M"/><SubModules><SubModule><DLLName value="` + dll + `"/></SubModule></SubModules></Module>`
+		if _, err := bannerlord.ParseModule(strings.NewReader(ok)); err != nil {
+			t.Errorf("DLLName %q refused: %v", dll, err)
+		}
 	}
 }
 
@@ -310,6 +354,15 @@ func TestParseModuleReadsUTF16(t *testing.T) {
 		if err != nil || m.ID != "m" {
 			t.Errorf("%s: id %q err %v", name, m.ID, err)
 		}
+		odd := append(append([]byte(nil), b...), 0x00)
+		m, err = bannerlord.ParseModule(strings.NewReader(string(odd)))
+		if err != nil || m.ID != "m" {
+			t.Errorf("%s odd: id %q err %v", name, m.ID, err)
+		}
+	}
+	_, err := bannerlord.ParseModule(strings.NewReader(string([]byte{0xFF, 0xFE})))
+	if !errors.Is(err, bannerlord.ErrInvalid) {
+		t.Errorf("UTF-16 BOM-only: %v", err)
 	}
 }
 
