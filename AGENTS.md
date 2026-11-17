@@ -21,7 +21,7 @@ No code is OS-specific; the Windows job runs the same tests.
 - `Sort` reports problems as `Issue`s and never fails: a manager wants to show every problem at once, and a missing
   dependency must not hide the rest of the list. Only cycle members are dropped from the order, since no valid
   position exists for them.
-- `Version.Compare` ignores the channel prefix (`v`, `e`, ...): the game orders by the numbers only.
+- `Version.Compare` orders by channel first (`a`, `b`, `e`, `v`, `d`, as `channels` in `version.go` lists them), then by the numbers.
 - `Launcher` keeps unmodelled elements as the generic tree and edits only `UserModData` entries, so a launcher
   update that adds fields does not lose them. Comments and namespace prefixes are not preserved; LauncherData.xml
   uses neither.
