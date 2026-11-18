@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"strings"
@@ -379,5 +380,76 @@ func TestSortLargeSetIsFast(t *testing.T) {
 	}
 	if d := time.Since(start); d > 500*time.Millisecond {
 		t.Fatalf("Sort of 5000 modules took %v", d)
+	}
+}
+
+type errReader struct{ err error }
+
+func (r errReader) Read([]byte) (int, error) { return 0, r.err }
+
+func TestParseLauncherRefusesBrokenXML(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		r    io.Reader
+		want error
+	}{
+		{"iso-8859-1 declaration", strings.NewReader(`<?xml version="1.0" encoding="iso-8859-1"?><UserData/>`), bannerlord.ErrInvalid},
+		{"utf-16 declaration without BOM", strings.NewReader(`<?xml version="1.0" encoding="utf-16"?><UserData/>`), bannerlord.ErrInvalid},
+		{"unclosed root", strings.NewReader(`<UserData>`), nil},
+		{"second root element", strings.NewReader(`<UserData/><Extra/>`), bannerlord.ErrInvalid},
+		{"read failure", errReader{io.ErrClosedPipe}, io.ErrClosedPipe},
+	}
+	for _, c := range cases {
+		_, err := bannerlord.ParseLauncher(c.r)
+		if err == nil {
+			t.Errorf("%s: accepted", c.name)
+			continue
+		}
+		if c.want != nil && !errors.Is(err, c.want) {
+			t.Errorf("%s: %v, want %v", c.name, err, c.want)
+		}
+	}
+}
+
+func TestLauncherMissingListsStayEmptyAndSetModsKeepsForeignSiblings(t *testing.T) {
+	t.Parallel()
+	if _, err := bannerlord.ParseLauncher(strings.NewReader(`<NotUserData/>`)); !errors.Is(err, bannerlord.ErrInvalid) {
+		t.Errorf("wrong root: %v", err)
+	}
+
+	empty, err := bannerlord.ParseLauncher(strings.NewReader(`<UserData><SingleplayerData></SingleplayerData></UserData>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := empty.Mods(bannerlord.Singleplayer); len(got) != 0 {
+		t.Errorf("mode without ModDatas: %v", got)
+	}
+
+	l, err := bannerlord.ParseLauncher(strings.NewReader(
+		`<UserData><SingleplayerData><ModDatas>` +
+			`<Note>keep</Note>` +
+			`<UserModData><Id>A</Id></UserModData>` +
+			`</ModDatas></SingleplayerData></UserData>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := l.Mods(bannerlord.Singleplayer); !reflect.DeepEqual(got, []bannerlord.LauncherMod{{ID: "A"}}) {
+		t.Errorf("missing IsSelected = %v", got)
+	}
+	if err := l.SetMods(bannerlord.Singleplayer, []string{"B", "A"}); err != nil {
+		t.Fatal(err)
+	}
+	out, err := l.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), "<Note>keep</Note>") {
+		t.Errorf("lost Note in\n%s", out)
+	}
+	if got := l.Mods(bannerlord.Singleplayer); !reflect.DeepEqual(got, []bannerlord.LauncherMod{
+		{ID: "B", Selected: true}, {ID: "A", Selected: true},
+	}) {
+		t.Errorf("after SetMods = %v", got)
 	}
 }
