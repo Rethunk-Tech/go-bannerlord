@@ -6,6 +6,19 @@ Notable changes to `go-bannerlord`. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Load order picks the next ready module from a heap instead of re-sorting each time.
+
+### Fixed
+
+- BOM-marked UTF-16 documents are read.
+- Mixed-case metadata attributes no longer drop load order.
+- `Sort` never checks `Metadata.Version`.
+- `ParseVersion` refuses a `-0` part.
+- `DLLName` also refuses `COM0`, `LPT0`, superscript ports and `CONIN$`/`CONOUT$`; module ids that are Windows reserved device names are refused too.
+- Booleans parse like `bool.Parse`, not only lowercase `true`.
+
 ## [0.1.2] - 2026-11-07
 
 ### Fixed
