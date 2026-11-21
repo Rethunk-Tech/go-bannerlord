@@ -6,6 +6,8 @@ Notable changes to `go-bannerlord`. The format follows
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-21
+
 ### Changed
 
 - Load order picks the next ready module from a heap instead of re-sorting each time.
@@ -46,7 +48,8 @@ Notable changes to `go-bannerlord`. The format follows
 - `Sort`: dependency and load-order sort with official modules first; cycles, missing, outdated, incompatible and duplicate modules are typed issues.
 - `Launcher`: read and rewrite LauncherData.xml's enabled mod set and order, keeping unknown elements.
 
-[Unreleased]: https://github.com/Rethunk-Tech/go-bannerlord/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/Rethunk-Tech/go-bannerlord/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/Rethunk-Tech/go-bannerlord/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Rethunk-Tech/go-bannerlord/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Rethunk-Tech/go-bannerlord/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Rethunk-Tech/go-bannerlord/releases/tag/v0.1.0
